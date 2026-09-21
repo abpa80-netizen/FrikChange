@@ -175,3 +175,21 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 revoke execute on function public.protect_listing_fields() from public,anon,authenticated;
 revoke execute on function public.handle_new_user() from public,anon,authenticated;
 grant delete on public.listings to authenticated;
+
+-- Current listing enrichment and secure grants
+alter table public.listings add column if not exists amount numeric,add column if not exists amount_desired numeric,add column if not exists district text,add column if not exists is_traveler boolean not null default false,add column if not exists flight_date date,add column if not exists destination_city text,add column if not exists notes text;
+update public.listings set amount=coalesce(amount,nullif(regexp_replace(split_part(amount_range,'-',1),'[^0-9.]','','g'),'')::numeric) where amount is null;
+update public.listings set district=coalesce(district,neighborhood) where district is null;
+drop view if exists public.public_listings;
+create view public.public_listings with(security_invoker=true) as select id,type,currency,amount,amount_desired,country,city,district,is_traveler,flight_date,destination_city,notes,created_at from public.listings where status='APPROVED';
+drop policy if exists listings_select on public.listings;drop policy if exists listings_owner_insert on public.listings;drop policy if exists listings_owner_update on public.listings;drop policy if exists listings_owner_delete on public.listings;
+create policy listings_select on public.listings for select to anon,authenticated using(status='APPROVED' or (select auth.uid())=user_id);
+create policy listings_owner_insert on public.listings for insert to authenticated with check((select auth.uid())=user_id and status='PENDING');
+create policy listings_owner_update on public.listings for update to authenticated using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
+create policy listings_owner_delete on public.listings for delete to authenticated using((select auth.uid())=user_id);
+revoke all on public.listings from anon,authenticated;
+grant select(id,type,currency,amount,amount_desired,country,city,district,is_traveler,flight_date,destination_city,notes,created_at) on public.listings to anon,authenticated;
+grant insert(type,currency,amount_range,amount,amount_desired,country,city,neighborhood,district,country_manual,city_manual,neighborhood_manual,whatsapp_number,is_traveler,flight_date,destination_city,notes,status,user_id) on public.listings to authenticated;
+grant update(type,currency,amount_range,amount,amount_desired,country,city,neighborhood,district,country_manual,city_manual,neighborhood_manual,whatsapp_number,is_traveler,flight_date,destination_city,notes) on public.listings to authenticated;
+grant delete on public.listings to authenticated;
+grant select on public.public_listings to anon,authenticated;
