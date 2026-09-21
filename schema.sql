@@ -193,3 +193,71 @@ grant insert(type,currency,amount_range,amount,amount_desired,country,city,neigh
 grant update(type,currency,amount_range,amount,amount_desired,country,city,neighborhood,district,country_manual,city_manual,neighborhood_manual,whatsapp_number,is_traveler,flight_date,destination_city,notes) on public.listings to authenticated;
 grant delete on public.listings to authenticated;
 grant select on public.public_listings to anon,authenticated;
+
+
+-- Referral capture/RLS + dual-currency listing model
+alter table public.listings
+  add column if not exists amount_currency text,
+  add column if not exists desired_currency text;
+
+update public.listings
+set amount_currency = case
+  when upper(currency) in ('MAD','XOF','XAF','CDF','GNF','GHS','EUR','USD') then upper(currency)
+  else null
+end
+where amount_currency is null;
+
+update public.listings
+set desired_currency = case
+  when upper(currency) in ('MAD','XOF','XAF','CDF','GNF','GHS','EUR','USD') then upper(currency)
+  else null
+end
+where desired_currency is null;
+
+alter table public.listings drop constraint if exists listings_amount_currency_check;
+alter table public.listings add constraint listings_amount_currency_check
+  check (amount_currency is null or amount_currency in ('MAD','XOF','XAF','CDF','GNF','GHS','EUR','USD'));
+alter table public.listings drop constraint if exists listings_desired_currency_check;
+alter table public.listings add constraint listings_desired_currency_check
+  check (desired_currency is null or desired_currency in ('MAD','XOF','XAF','CDF','GNF','GHS','EUR','USD'));
+
+create index if not exists profiles_referred_by_idx on public.profiles(referred_by);
+
+drop policy if exists profiles_own_select on public.profiles;
+drop policy if exists profiles_referrals_select on public.profiles;
+drop policy if exists profiles_select_own_or_referrals on public.profiles;
+create policy profiles_select_own_or_referrals
+on public.profiles for select to authenticated
+using ((select auth.uid())=id or (select auth.uid())=referred_by);
+
+revoke all on public.profiles from anon,authenticated;
+grant select(id,full_name,phone_whatsapp,referral_code,is_ambassador,created_at,referred_by)
+  on public.profiles to authenticated;
+grant update(full_name,phone_whatsapp) on public.profiles to authenticated;
+
+drop view if exists public.my_referrals;
+create view public.my_referrals with(security_invoker=true) as
+select id,created_at
+from public.profiles
+where referred_by=(select auth.uid());
+grant select on public.my_referrals to authenticated;
+
+revoke select on public.listings from anon,authenticated;
+grant select(
+  id,type,currency,amount_currency,desired_currency,amount,amount_desired,
+  country,city,district,is_traveler,flight_date,destination_city,notes,created_at
+) on public.listings to anon,authenticated;
+
+revoke insert on public.listings from authenticated;
+grant insert(
+  type,currency,amount_range,amount,amount_desired,amount_currency,desired_currency,
+  country,city,neighborhood,district,country_manual,city_manual,neighborhood_manual,
+  whatsapp_number,is_traveler,flight_date,destination_city,notes,status,user_id
+) on public.listings to authenticated;
+
+revoke update on public.listings from authenticated;
+grant update(
+  type,currency,amount_range,amount,amount_desired,amount_currency,desired_currency,
+  country,city,neighborhood,district,country_manual,city_manual,neighborhood_manual,
+  whatsapp_number,is_traveler,flight_date,destination_city,notes
+) on public.listings to authenticated;
