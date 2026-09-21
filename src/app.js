@@ -1,0 +1,6 @@
+import {supabase} from './supabaseClient.js';
+import {createUnlock,getUnlockedContact} from './payments.js';
+const escapeHtml=v=>String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+async function unlock(id){try{const d=await createUnlock(id,supabase);if(d.alreadyUnlocked&&d.transactionId){const c=await getUnlockedContact(d.transactionId,supabase);document.getElementById('message').textContent='Contact déverrouillé: '+c.whatsapp_number;return}if(d.checkoutUrl)window.location.assign(d.checkoutUrl)}catch(e){document.getElementById('message').textContent=e.message}}
+async function load(){const {data,error}=await supabase.from('public_listings').select('*').order('created_at',{ascending:false});const box=document.getElementById('listings');if(error){box.textContent='Impossible de charger les annonces.';return}box.innerHTML=(data||[]).map(x=>'<article class="card"><strong>'+escapeHtml(x.type)+'</strong><h3>'+escapeHtml(x.currency)+' · '+escapeHtml(x.amount_range)+'</h3><p>'+escapeHtml(x.country)+' · '+escapeHtml(x.city)+'</p><button data-id="'+x.id+'" class="unlock">Débloquer le WhatsApp</button></article>').join('')||'<p>Aucune annonce approuvée.</p>';box.querySelectorAll('.unlock').forEach(b=>b.addEventListener('click',()=>unlock(b.dataset.id)))}
+load();
