@@ -1,4 +1,5 @@
 import {supabase} from './supabaseClient.js';
+import {bindUI} from './ui.js';
 import {signUp,signIn,signOut,resetPassword} from './auth.js';
 import {createUnlock,getUnlockedContact} from './payments.js';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -130,7 +131,12 @@ async function form(id){
     closeModal();msg(id?'Annonce mise à jour.':'Annonce envoyée pour validation.');listings();
   };
 }
-function closeModal(){$('#modal').classList.remove('show');$('#modal').innerHTML=''}window.closeModal=closeModal;window.newListing=()=>{if(!state.session){state.view='auth';render();msg('Connectez-vous ou créez votre compte pour publier une annonce.',true);return}form()};window.searchMarket=market;
+function closeModal(){$('#modal').classList.remove('show');$('#modal').innerHTML=''}window.closeModal=closeModal;
+function openAuth(signup=false){state.view='auth';render();const toggle=$('#toggle');if(signup&&toggle){toggle.dataset.signup='1';$('#extra').hidden=false;$('#asubmit').textContent='Créer mon compte';toggle.textContent='J’ai déjà un compte'}}
+window.openAuth=openAuth;
+window.newListing=()=>{if(!state.session)return openAuth(true);form()};
+window.handlePublish=()=>{if(!state.session)return openAuth(true);form()};
+window.searchMarket=market;
 async function payments(){const {data,error}=await supabase.from('unlock_transactions').select('amount_paid,currency,status,created_at').order('created_at',{ascending:false}).limit(50);$('#payments').innerHTML=error?'<div class="empty">Impossible de charger les paiements.</div>':(data||[]).map(x=>`<div class="row"><div><b>${Number(x.amount_paid).toFixed(2)} ${esc(x.currency)}</b><small>${new Date(x.created_at).toLocaleString('fr-FR')}</small></div><span class="status ${String(x.status).toLowerCase()}">${esc(x.status)}</span></div>`).join('')||'<div class="empty">Aucun paiement.</div>'}
 function referralLink(){return location.origin+'/?ref='+(state.profile?.referral_code||'')}
 async function ambassador(){const {data,error}=await supabase.from('commissions').select('*').order('created_at',{ascending:false});if(error)return msg(error.message,true);const total=(data||[]).reduce((s,x)=>s+Number(x.commission_amount||0),0),link=referralLink();
@@ -144,4 +150,5 @@ window.copyReferral=async()=>{const l=referralLink();try{await navigator.clipboa
 function auth(){if($('#ref'))$('#ref').value=getReferralCode();const eye=$('#toggle-password');if(eye&&!eye.dataset.bound){eye.dataset.bound='1';eye.onclick=()=>{const p=$('#password');p.type=p.type==='password'?'text':'password';eye.textContent=p.type==='password'?'👁':'🙈'}}const f=$('#af'),toggle=$('#toggle');if(f.dataset.bound)return;f.dataset.bound='1';toggle.onclick=()=>{const s=toggle.dataset.signup!=='1';toggle.dataset.signup=s?'1':'0';$('#extra').hidden=!s;$('#asubmit').textContent=s?'Créer mon compte':'Se connecter';toggle.textContent=s?'J’ai déjà un compte':'Créer un compte'};$('#forgot').onclick=async()=>{try{await resetPassword($('#email').value.trim());msg('Email de réinitialisation envoyé.')}catch(e){msg(e.message,true)}};f.onsubmit=async e=>{e.preventDefault();try{if(toggle.dataset.signup==='1'){await signUp({email:$('#email').value.trim(),password:$('#password').value,fullName:$('#name').value.trim(),phone:$('#phone').value.trim(),referralCode:$('#ref').value.trim()});msg('Compte créé. Vérifiez votre email si nécessaire.')}else{await signIn($('#email').value.trim(),$('#password').value);state.session=(await supabase.auth.getSession()).data.session;await profile();state.view='dash';render()}}catch(x){const t=String(x?.message||'').toLowerCase();if(x?.code==='EMAIL_RATE_LIMIT'||x?.status===429||t.includes('email rate limit')||t.includes('rate limit')||t.includes('too many requests'))msg('Trop de tentatives d'inscription rapprochées. Veuillez patienter 5 minutes ou vérifier vos mails.',true);else msg(x?.message||'Une erreur est survenue.',true)}}}
 async function render(){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));($('#p-'+state.view)||$('#p-market')).classList.add('active');$('#account').innerHTML=state.session?`<button class="ghost" onclick="go('dash')">Mon espace</button><button class="ghost" id="out">Déconnexion</button>`:'<button class="primary" onclick="go(\'auth\')">Connexion</button>';if($('#out'))$('#out').onclick=async()=>{await signOut();state.session=null;state.profile=null;state.view='market';render()};if(state.view==='market')market();if(state.view==='auth')auth();if(state.view==='dash'&&state.session){$('#hello').textContent=state.profile?.full_name||state.session.user.email;listings();payments()}if(state.view==='amb'&&state.session)ambassador()}
 window.go=v=>{if(!state.session&&['dash','amb'].includes(v))v='auth';state.view=v;render()};
+bindUI();
 (async()=>{state.session=(await supabase.auth.getSession()).data.session;await profile();supabase.auth.onAuthStateChange(async(_,s)=>{state.session=s;await profile();if(state.view==='dash'||state.view==='amb')render()});render()})();
