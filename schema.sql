@@ -181,7 +181,7 @@ alter table public.listings add column if not exists amount numeric,add column i
 update public.listings set amount=coalesce(amount,nullif(regexp_replace(split_part(amount_range,'-',1),'[^0-9.]','','g'),'')::numeric) where amount is null;
 update public.listings set district=coalesce(district,neighborhood) where district is null;
 drop view if exists public.public_listings;
-create view public.public_listings with(security_invoker=true) as select id,type,currency,amount,amount_desired,country,city,district,is_traveler,flight_date,destination_city,notes,created_at from public.listings where status='APPROVED';
+create view public.public_listings with(security_invoker=true) as select id,type,currency,amount_currency,desired_currency,amount,amount_desired,country,city,district,is_traveler,flight_date,destination_city,notes,created_at from public.listings where status='APPROVED';
 drop policy if exists listings_select on public.listings;drop policy if exists listings_owner_insert on public.listings;drop policy if exists listings_owner_update on public.listings;drop policy if exists listings_owner_delete on public.listings;
 create policy listings_select on public.listings for select to anon,authenticated using(status='APPROVED' or (select auth.uid())=user_id);
 create policy listings_owner_insert on public.listings for insert to authenticated with check((select auth.uid())=user_id and status='PENDING');
