@@ -83,6 +83,7 @@ alter table public.testimonials enable row level security;
 
 drop policy if exists profiles_own_select on public.profiles;
 drop policy if exists profiles_own_update on public.profiles;
+drop policy if exists listings_public_approved on public.listings;
 drop policy if exists listings_owner_insert on public.listings;
 drop policy if exists listings_owner_update on public.listings;
 drop policy if exists pricing_public_active on public.pricing_tiers;
@@ -93,6 +94,7 @@ drop policy if exists testimonials_public_active on public.testimonials;
 
 create policy profiles_own_select on public.profiles for select to authenticated using((select auth.uid())=id);
 create policy profiles_own_update on public.profiles for update to authenticated using((select auth.uid())=id) with check((select auth.uid())=id);
+create policy listings_public_approved on public.listings for select to anon,authenticated using(status='APPROVED');
 create policy listings_owner_insert on public.listings for insert to authenticated with check((select auth.uid())=user_id);
 create policy listings_owner_update on public.listings for update to authenticated using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 create policy pricing_public_active on public.pricing_tiers for select to anon,authenticated using(active=true);
@@ -106,6 +108,7 @@ create view public.public_listings with(security_invoker=true) as
 select id,user_id,type,currency,amount_range,country,city,neighborhood,country_manual,city_manual,neighborhood_manual,status,created_at
 from public.listings where status='APPROVED';
 
+grant select(id,user_id,type,currency,amount_range,country,city,neighborhood,country_manual,city_manual,neighborhood_manual,status,created_at) on public.listings to anon,authenticated;
 grant select on public.public_listings,public.pricing_tiers,public.promo_banner,public.testimonials to anon,authenticated;
 revoke all on public.listings from anon,authenticated;
 grant insert,update on public.listings to authenticated;
