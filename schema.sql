@@ -123,3 +123,55 @@ insert into public.pricing_tiers(min_amount,max_amount,unlock_price,currency,sor
 select 5001,null,50,'MAD',3 where not exists(select 1 from public.pricing_tiers where min_amount=5001);
 revoke execute on function public.handle_new_user() from public,anon,authenticated;
 revoke execute on function public.create_commission_on_success() from public,anon,authenticated;
+
+
+-- Post-MVP hardening / current production state
+alter table public.unlock_transactions add column if not exists chariow_checkout_url text;
+
+drop policy if exists listings_public_approved on public.listings;
+drop policy if exists listings_owner_select on public.listings;
+drop policy if exists listings_owner_insert on public.listings;
+drop policy if exists listings_owner_update on public.listings;
+drop policy if exists listings_owner_delete on public.listings;
+create policy listings_select on public.listings for select to anon,authenticated
+using(status='APPROVED' or (select auth.uid())=user_id);
+create policy listings_owner_insert on public.listings for insert to authenticated
+with check((select auth.uid())=user_id and status='PENDING');
+create policy listings_owner_update on public.listings for update to authenticated
+using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
+create policy listings_owner_delete on public.listings for delete to authenticated
+using((select auth.uid())=user_id);
+
+create or replace function public.protect_listing_fields()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if auth.uid() = old.user_id then
+    new.user_id := old.user_id;
+    new.status := old.status;
+  end if;
+  return new;
+end $$;
+drop trigger if exists protect_listing_fields_trigger on public.listings;
+create trigger protect_listing_fields_trigger before update on public.listings
+for each row execute function public.protect_listing_fields();
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path=public as $$
+declare referrer uuid;
+begin
+  select id into referrer from public.profiles
+  where referral_code=upper(nullif(trim(new.raw_user_meta_data->>'referral_code'),''))
+  limit 1;
+  insert into public.profiles(id,full_name,phone_whatsapp,referred_by)
+  values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),
+         new.raw_user_meta_data->>'phone_whatsapp',
+         case when referrer is not null and referrer<>new.id then referrer else null end)
+  on conflict(id) do nothing;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
+
+revoke execute on function public.protect_listing_fields() from public,anon,authenticated;
+revoke execute on function public.handle_new_user() from public,anon,authenticated;
+grant delete on public.listings to authenticated;
