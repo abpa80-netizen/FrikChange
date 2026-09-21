@@ -24,9 +24,9 @@ async function form(id){
   }
   const country=ex?.country||'Maroc';
   const cities=COUNTRIES[country]||[];
-  const cityIsManual=!cities.includes(ex?.city||'');
+  const cityIsManual=cities.length===0||!cities.includes(ex?.city||'');
   const districts=DISTRICTS[ex?.city||'']||[];
-  const districtIsManual=!districts.includes(ex?.district||'')&&!!ex?.district;
+  const districtIsManual=districts.length===0||(!districts.includes(ex?.district||'')&&!!ex?.district);
   const amountCurrency=ex?.amount_currency||ex?.currency||'MAD';
   const desiredCurrency=ex?.desired_currency||ex?.currency||'XOF';
   $('#modal').innerHTML=`<div class="modal modal-wide"><button class="close" onclick="closeModal()">×</button><span class="tag">ANNONCE</span><h2>${id?'Modifier':'Publier'} une annonce</h2><form id="lf" class="form">
@@ -77,6 +77,7 @@ async function form(id){
   const buildCity=()=>{
     const arr=COUNTRIES[ce.value]||[];
     ci.innerHTML=opts(arr,'')+'<option value="__manual__">Autre / Saisie manuelle</option>';
+    if(!arr.length)ci.value='__manual__';
     di.innerHTML='<option value="">Choisir un quartier</option><option value="__manual__">Autre / Saisie manuelle</option>';
     syncCityManual();syncDistrictManual();
   };
@@ -84,6 +85,7 @@ async function form(id){
     const city=ci.value==='__manual__'?(cm.value||''):ci.value;
     const arr=DISTRICTS[city]||[];
     di.innerHTML='<option value="">Choisir un quartier</option>'+opts(arr,'')+'<option value="__manual__">Autre / Saisie manuelle</option>';
+    if(!arr.length)di.value='__manual__';
     syncDistrictManual();
   };
   ce.onchange=()=>buildCity();
