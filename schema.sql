@@ -118,3 +118,5 @@ insert into public.pricing_tiers(min_amount,max_amount,unlock_price,currency,sor
 select 2001,5000,30,'MAD',2 where not exists(select 1 from public.pricing_tiers where min_amount=2001);
 insert into public.pricing_tiers(min_amount,max_amount,unlock_price,currency,sort_order)
 select 5001,null,50,'MAD',3 where not exists(select 1 from public.pricing_tiers where min_amount=5001);
+revoke execute on function public.handle_new_user() from public,anon,authenticated;
+revoke execute on function public.create_commission_on_success() from public,anon,authenticated;
