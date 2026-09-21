@@ -1,0 +1,18 @@
+const json=(res,status,body)=>res.status(status).setHeader('Content-Type','application/json; charset=utf-8').json(body);
+async function supa(path,opts={}){const r=await fetch(process.env.SUPABASE_URL+'/rest/v1/'+path,{...opts,headers:{apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,Authorization:'Bearer '+process.env.SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json',Prefer:'return=representation',...(opts.headers||{})}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return{r,data}}
+async function authUser(token){const r=await fetch(process.env.SUPABASE_URL+'/auth/v1/user',{headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:'Bearer '+token}});if(!r.ok)return null;return r.json()}
+module.exports=async function(req,res){
+ if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
+ const token=(req.headers.authorization||'').replace(/^Bearer\s+/,'');if(!token)return json(res,401,{error:'Authentication required'});
+ const user=await authUser(token);if(!user?.id)return json(res,401,{error:'Invalid session'});
+ const listingId=req.body?.listingId;if(!listingId)return json(res,400,{error:'listingId is required'});
+ if(!process.env.CHARIOW_API_KEY||!process.env.CHARIOW_CHECKOUT_ENDPOINT)return json(res,503,{error:'Chariow checkout is not configured'});
+ let q=await supa('listings?select=id,status,user_id,amount_range,currency&id=eq.'+encodeURIComponent(listingId)+'&limit=1');if(!q.r.ok||!q.data?.[0])return json(res,404,{error:'Listing not found'});
+ const listing=q.data[0];if(listing.status!=='APPROVED')return json(res,404,{error:'Listing not available'});if(listing.user_id===user.id)return json(res,400,{error:'Cannot unlock your own listing'});
+ q=await supa('unlock_transactions?select=id,status&listing_id=eq.'+listingId+'&buyer_id=eq.'+user.id+'&status=eq.SUCCESS&limit=1');if(q.data?.[0])return json(res,200,{alreadyUnlocked:true,transactionId:q.data[0].id});
+ q=await supa('pricing_tiers?select=*&active=eq.true&order=sort_order.asc');if(!q.r.ok)return json(res,500,{error:'Pricing unavailable'});
+ const n=Number(String(listing.amount_range).replace(/[^0-9.]/g,''))||0;const tier=(q.data||[]).find(t=>n>=Number(t.min_amount)&&(t.max_amount==null||n<=Number(t.max_amount)));if(!tier)return json(res,409,{error:'No pricing tier matches'});
+ q=await supa('unlock_transactions',{method:'POST',body:JSON.stringify({listing_id:listingId,buyer_id:user.id,amount_paid:tier.unlock_price,currency:tier.currency,pricing_tier_id:tier.id,status:'PENDING'})});if(!q.r.ok)return json(res,500,{error:'Unable to create transaction'});
+ const tx=q.data[0];const payload={amount:Number(tier.unlock_price),currency:tier.currency,product_id:tier.chariow_product_id||undefined,metadata:{transaction_id:tx.id,listing_id:listingId,buyer_id:user.id},success_url:process.env.FRIKCHANGE_SUCCESS_URL||'https://frik-change.vercel.app/?payment=success&transaction_id='+tx.id};
+ try{const r=await fetch(process.env.CHARIOW_CHECKOUT_ENDPOINT,{method:'POST',headers:{Authorization:'Bearer '+process.env.CHARIOW_API_KEY,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)});const data=await r.json().catch(()=>({}));const url=data.checkout_url||data.url||data.data?.checkout_url||data.data?.url;if(!r.ok||!url){await supa('unlock_transactions?id=eq.'+tx.id,{method:'PATCH',body:JSON.stringify({status:'FAILED',chariow_payload:data})});return json(res,502,{error:'Chariow checkout creation failed',transactionId:tx.id})}return json(res,200,{checkoutUrl:url,transactionId:tx.id})}catch(e){await supa('unlock_transactions?id=eq.'+tx.id,{method:'PATCH',body:JSON.stringify({status:'FAILED'})});return json(res,502,{error:'Unable to reach Chariow',transactionId:tx.id})}
+};
