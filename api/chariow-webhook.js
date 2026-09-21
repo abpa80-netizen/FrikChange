@@ -4,8 +4,9 @@ const pick=(o,...ps)=>{for(const p of ps){let v=o;for(const k of p.split('.'))v=
 const successful=p=>{const e=String(pick(p,'event','type','name','data.event','data.type')||'').toLowerCase();const s=String(pick(p,'status','data.status','transaction.status','data.transaction.status')||'').toLowerCase();return /success|successful|succeeded|completed|paid|vente[ ._-]*(réussie|reussie)/i.test(e)||/success|successful|succeeded|completed|paid/i.test(s)};
 module.exports=async function(req,res){
  if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
- const expected=process.env.CHARIOW_WEBHOOK_SECRET;const received=req.headers['x-chariow-webhook-secret'];
- if(expected&&received!==expected)return json(res,401,{error:'Invalid webhook secret'});
+ const expected=process.env.CHARIOW_WEBHOOK_SECRET;const received=req.headers['x-chariow-webhook-secret']||req.query?.token;
+ if(!expected)return json(res,503,{error:'Webhook security is not configured'});
+ if(received!==expected)return json(res,401,{error:'Invalid webhook secret'});
  const p=typeof req.body==='string'?JSON.parse(req.body):req.body||{};if(!successful(p))return json(res,200,{received:true,processed:false});
  const id=pick(p,'metadata.transaction_id','data.metadata.transaction_id','transaction_id','data.transaction_id','transaction.metadata.transaction_id');if(!id)return json(res,400,{error:'transaction_id missing'});
  let q=await db('unlock_transactions?select=id,status&id=eq.'+encodeURIComponent(id)+'&limit=1');if(!q.ok||!q.data?.[0])return json(res,404,{error:'Unknown transaction'});if(q.data[0].status==='SUCCESS')return json(res,200,{received:true,duplicate:true});
