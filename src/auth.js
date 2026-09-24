@@ -1,40 +1,8 @@
 import {supabase} from './supabaseClient.js';
-function cleanOrigin(){return window.location.origin.replace(/\/$/,'')||window.location.origin}
-function isRateLimitError(error){
-  const text=String(error?.message||error?.code||'').toLowerCase();
-  return error?.status===429 || text.includes('rate limit') || text.includes('rate_limit') || text.includes('too many requests') || text.includes('over_email_send_rate_limit');
-}
-function authError(error){
-  if(isRateLimitError(error)){
-    const e=new Error('Trop de tentatives d'inscription rapprochées. Veuillez patienter 5 minutes ou vérifier vos mails.');
-    e.code='EMAIL_RATE_LIMIT';
-    e.status=429;
-    return e;
-  }
-  return error;
-}
-export async function signUp(v){
-  const email=String(v.email||'').trim().toLowerCase();
-  const redirect=cleanOrigin();
-  let storedRef='';
-  try{storedRef=(localStorage.getItem('frik_ref')||'').trim().toUpperCase()}catch{}
-  const referralCode=storedRef||String(v.referralCode||'').trim().toUpperCase();
-  try{
-    const {data,error}=await supabase.auth.signUp({
-      email,password:v.password,
-      options:{emailRedirectTo:redirect,data:{full_name:v.fullName||'',phone_whatsapp:v.phone||'',referral_code:referralCode}}
-    });
-    if(error)throw authError(error);
-    try{if(referralCode)localStorage.removeItem('frik_ref')}catch{}
-    return data;
-  }catch(error){
-    throw authError(error);
-  }
-}
-export async function signIn(email,password){
-  const {data,error}=await supabase.auth.signInWithPassword({email:String(email).trim().toLowerCase(),password});
-  if(error)throw error;
-  return data;
-}
-export async function signOut(){const {error}=await supabase.auth.signOut();if(error)throw error}
-export async function resetPassword(email){const {error}=await supabase.auth.resetPasswordForEmail(String(email).trim().toLowerCase(),{redirectTo:cleanOrigin()});if(error)throw error}
+const origin=()=>window.location.origin.replace(/\/$/,'');
+const rateLimit=e=>e?.status===429||/rate.?limit|too many|over_email_send_rate_limit/i.test(String(e?.message||e?.code||''));
+const normalize=e=>{if(rateLimit(e))return new Error('Trop de tentatives d’inscription rapprochées. Veuillez patienter quelques minutes avant de réessayer ou vérifier votre boîte mail.');return new Error(e?.message||'Une erreur est survenue.');};
+export async function signUp({email,password,fullName,phone,referralCode}){try{return await supabase.auth.signUp({email,password,options:{emailRedirectTo:origin(),data:{full_name:fullName||'',phone_whatsapp:phone||'',referral_code:referralCode||''}}})}catch(e){throw normalize(e)}}
+export async function signIn(email,password){try{return await supabase.auth.signInWithPassword({email,password})}catch(e){throw normalize(e)}}
+export async function signOut(){const r=await supabase.auth.signOut();if(r.error)throw normalize(r.error);return r}
+export async function resetPassword(email){if(!email)throw new Error('Saisissez votre email.');try{return await supabase.auth.resetPasswordForEmail(email,{redirectTo:origin()})}catch(e){throw normalize(e)}}
