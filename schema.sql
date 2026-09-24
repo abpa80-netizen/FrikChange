@@ -2,7 +2,7 @@
 create extension if not exists pgcrypto;
 do $$ begin create type public.listing_type as enum ('OFFRE','BESOIN','VOYAGEUR_GP'); exception when duplicate_object then null; end $$;
 do $$ begin create type public.listing_status as enum ('PENDING','APPROVED','REJECTED'); exception when duplicate_object then null; end $$;
-do $$ begin create type public.unlock_status as enum ('PENDING','SUCCESS','FAILED','CANCELLED'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.transaction_status as enum ('PENDING','SUCCESS','FAILED','CANCELLED'); exception when duplicate_object then null; end $$;
 do $$ begin create type public.commission_status as enum ('PENDING','AVAILABLE','WITHDRAWN'); exception when duplicate_object then null; end $$;
 
 create table if not exists public.profiles(
@@ -23,21 +23,21 @@ create table if not exists public.listings(
  created_at timestamptz not null default now()
 );
 create table if not exists public.pricing_tiers(
- id uuid primary key default gen_random_uuid(), min_amount numeric not null default 0, max_amount numeric,
+ id uuid primary key default gen_random_uuid(), code text unique, min_amount numeric not null default 0, max_amount numeric,
  unlock_price numeric not null check(unlock_price>=0), currency text not null default 'MAD',
  chariow_product_id text, chariow_checkout_url text, active boolean not null default true, sort_order integer not null default 0
 );
-create table if not exists public.unlock_transactions(
+create table if not exists public.transactions(
  id uuid primary key default gen_random_uuid(), listing_id uuid not null references public.listings(id) on delete cascade,
  buyer_id uuid not null references public.profiles(id) on delete cascade, amount_paid numeric not null default 0,
  currency text not null default 'MAD', pricing_tier_id uuid references public.pricing_tiers(id) on delete set null,
- status public.unlock_status not null default 'PENDING', chariow_transaction_id text,
+ status public.transaction_status not null default 'PENDING', chariow_transaction_id text,
  chariow_payload jsonb, created_at timestamptz not null default now(), unlocked_at timestamptz
 );
 create table if not exists public.commissions(
  id uuid primary key default gen_random_uuid(), ambassador_id uuid not null references public.profiles(id) on delete cascade,
  referred_user_id uuid not null references public.profiles(id) on delete cascade,
- transaction_id uuid not null unique references public.unlock_transactions(id) on delete cascade,
+ transaction_id uuid not null unique references public.transactions(id) on delete cascade,
  commission_rate numeric not null default 30, commission_amount numeric not null default 0,
  status public.commission_status not null default 'PENDING', created_at timestamptz not null default now()
 );
@@ -46,8 +46,8 @@ create table if not exists public.testimonials(id uuid primary key default gen_r
 
 create index if not exists listings_status_created_idx on public.listings(status,created_at desc);
 create index if not exists listings_user_idx on public.listings(user_id);
-create index if not exists unlock_buyer_idx on public.unlock_transactions(buyer_id);
-create unique index if not exists unlock_success_unique on public.unlock_transactions(listing_id,buyer_id) where status='SUCCESS';
+create index if not exists unlock_buyer_idx on public.transactions(buyer_id);
+create unique index if not exists unlock_success_unique on public.transactions(listing_id,buyer_id) where status='SUCCESS';
 
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
 begin
@@ -70,13 +70,13 @@ begin
  end if;
  return new;
 end $$;
-drop trigger if exists unlock_success_commission on public.unlock_transactions;
-create trigger unlock_success_commission after update of status on public.unlock_transactions for each row execute function public.create_commission_on_success();
+drop trigger if exists unlock_success_commission on public.transactions;
+create trigger unlock_success_commission after update of status on public.transactions for each row execute function public.create_commission_on_success();
 
 alter table public.profiles enable row level security;
 alter table public.listings enable row level security;
 alter table public.pricing_tiers enable row level security;
-alter table public.unlock_transactions enable row level security;
+alter table public.transactions enable row level security;
 alter table public.commissions enable row level security;
 alter table public.promo_banner enable row level security;
 alter table public.testimonials enable row level security;
@@ -87,7 +87,7 @@ drop policy if exists listings_public_approved on public.listings;
 drop policy if exists listings_owner_insert on public.listings;
 drop policy if exists listings_owner_update on public.listings;
 drop policy if exists pricing_public_active on public.pricing_tiers;
-drop policy if exists unlock_buyer_select on public.unlock_transactions;
+drop policy if exists unlock_buyer_select on public.transactions;
 drop policy if exists commission_ambassador_select on public.commissions;
 drop policy if exists promo_public_active on public.promo_banner;
 drop policy if exists testimonials_public_active on public.testimonials;
@@ -98,7 +98,7 @@ create policy listings_public_approved on public.listings for select to anon,aut
 create policy listings_owner_insert on public.listings for insert to authenticated with check((select auth.uid())=user_id);
 create policy listings_owner_update on public.listings for update to authenticated using((select auth.uid())=user_id) with check((select auth.uid())=user_id);
 create policy pricing_public_active on public.pricing_tiers for select to anon,authenticated using(active=true);
-create policy unlock_buyer_select on public.unlock_transactions for select to authenticated using((select auth.uid())=buyer_id);
+create policy unlock_buyer_select on public.transactions for select to authenticated using((select auth.uid())=buyer_id);
 create policy commission_ambassador_select on public.commissions for select to authenticated using((select auth.uid())=ambassador_id);
 create policy promo_public_active on public.promo_banner for select to anon,authenticated using(active=true);
 create policy testimonials_public_active on public.testimonials for select to anon,authenticated using(active=true);
@@ -112,8 +112,8 @@ grant select(id,user_id,type,currency,amount_range,country,city,neighborhood,cou
 grant select on public.public_listings,public.pricing_tiers,public.promo_banner,public.testimonials to anon,authenticated;
 revoke all on public.listings from anon,authenticated;
 grant insert,update on public.listings to authenticated;
-revoke all on public.unlock_transactions from anon,authenticated;
-grant select on public.unlock_transactions to authenticated;
+revoke all on public.transactions from anon,authenticated;
+grant select on public.transactions to authenticated;
 
 insert into public.pricing_tiers(min_amount,max_amount,unlock_price,currency,sort_order)
 select 0,2000,20,'MAD',1 where not exists(select 1 from public.pricing_tiers);
@@ -126,7 +126,7 @@ revoke execute on function public.create_commission_on_success() from public,ano
 
 
 -- Post-MVP hardening / current production state
-alter table public.unlock_transactions add column if not exists chariow_checkout_url text;
+alter table public.transactions add column if not exists chariow_checkout_url text;
 
 drop policy if exists listings_public_approved on public.listings;
 drop policy if exists listings_owner_select on public.listings;
