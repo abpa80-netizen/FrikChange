@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "FrikChange",
+  "short_name": "FrikChange",
+  "description": "Marketplace P2P d'échange de devises et de services voyageurs entre le Maroc et l'Afrique subsaharienne.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#10B981",
+  "background_color": "#0B0F17",
+  "lang": "fr",
+  "categories": ["finance","shopping","social"],
+  "icons": [
+    {"src":"/icon-192x192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icon-512x512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
