@@ -1,19 +1,7 @@
-export function bindUI(){
-  const handleClick=e=>{
-    const btn=e.target.closest('button');
-    if(!btn)return;
-    const action=btn.dataset.action;
-    if(action==='signup'){
-      e.preventDefault();
-      if(typeof window.openAuth==='function')window.openAuth(true);
-      return;
-    }
-    if(action==='publish'){
-      e.preventDefault();
-      if(typeof window.handlePublish==='function')window.handlePublish();
-      return;
-    }
-  };
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>document.addEventListener('click',handleClick));
-  else document.addEventListener('click',handleClick);
+let mounted=false;
+export function bindUI({onAction,onChange,onSubmit}={}){
+ if(mounted)return;mounted=true;
+ document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;e.preventDefault();onAction?.(el.dataset.action,el,e)});
+ document.addEventListener('change',e=>onChange?.(e.target,e));
+ document.addEventListener('submit',e=>{if(e.target.matches('[data-form]')){e.preventDefault();onSubmit?.(e.target,e)}});
 }
