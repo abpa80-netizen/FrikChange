@@ -2,7 +2,7 @@
 create extension if not exists pgcrypto;
 do $$ begin create type public.listing_type as enum ('OFFRE','BESOIN','VOYAGEUR_GP'); exception when duplicate_object then null; end $$;
 do $$ begin create type public.listing_status as enum ('PENDING','APPROVED','REJECTED'); exception when duplicate_object then null; end $$;
-do $$ begin create type public.transaction_status as enum ('PENDING','SUCCESS','FAILED','CANCELLED'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.unlock_status as enum ('PENDING','SUCCESS','FAILED','CANCELLED'); exception when duplicate_object then null; end $$;
 do $$ begin create type public.commission_status as enum ('PENDING','AVAILABLE','WITHDRAWN'); exception when duplicate_object then null; end $$;
 
 create table if not exists public.profiles(
@@ -31,7 +31,7 @@ create table if not exists public.transactions(
  id uuid primary key default gen_random_uuid(), listing_id uuid not null references public.listings(id) on delete cascade,
  buyer_id uuid not null references public.profiles(id) on delete cascade, amount_paid numeric not null default 0,
  currency text not null default 'MAD', pricing_tier_id uuid references public.pricing_tiers(id) on delete set null,
- status public.transaction_status not null default 'PENDING', chariow_transaction_id text,
+ status public.unlock_status not null default 'PENDING', chariow_transaction_id text,
  chariow_payload jsonb, created_at timestamptz not null default now(), unlocked_at timestamptz
 );
 create table if not exists public.commissions(
