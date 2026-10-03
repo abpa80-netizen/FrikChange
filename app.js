@@ -18,6 +18,11 @@ const opts=(a,c='')=>a.map(x=>'<option value="'+esc(x)+'" '+(x===c?'selected':''
 
 async function loadProfile(){if(!state.session){state.profile=null;return}const {data,error}=await supabase.from('profiles').select('id,full_name,referral_code,is_ambassador,created_at,referred_by').eq('id',state.session.user.id).maybeSingle();if(error)toast(error.message,true);state.profile=data||null}
 
+async function loadOfficialAnnouncements(){
+ const el=$('#official-list');if(!el)return;
+ try{const r=await fetch('/api/admin/announcements',{headers:{Accept:'application/json'},cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'');const items=Array.isArray(d.items)?d.items:[];el.innerHTML=items.map(x=>'<article class="card"><span class="tag">'+esc(x.badge||'Annonce Officielle')+'</span><h3>'+esc(x.title)+'</h3><p>'+esc(x.text_fr||x.full_text||'')+'</p><small>'+new Date(x.created_at).toLocaleDateString('fr-FR')+'</small></article>').join('')||'<div class="empty">Aucune annonce officielle.</div>'}catch{el.innerHTML='<div class="empty">Les annonces officielles sont temporairement indisponibles.</div>'}
+}
+
 async function market(){
  let q=supabase.from('public_listings').select('*').order('created_at',{ascending:false}).limit(80);
  const t=$('#filter-type')?.value||'',c=$('#filter-currency')?.value||'',city=($('#filter-city')?.value||'').trim();
@@ -62,7 +67,7 @@ async function unlock(id){
 async function pollPayment(id){for(let i=0;i<24;i++){await new Promise(r=>setTimeout(r,5000));const {data}=await supabase.from('transactions').select('status').eq('id',id).maybeSingle();if(data?.status==='SUCCESS'){const r=await fetch('/api/unlock-contact?transactionId='+encodeURIComponent(id),{headers:{Authorization:'Bearer '+state.session.access_token}});const d=await r.json();if(r.ok)return showContact(d.whatsapp_number)}if(['FAILED','CANCELLED','REFUNDED'].includes(data?.status))return}toast('Le paiement n’est pas encore confirmé. Vous pouvez revenir dans votre espace.',true)}
 function showContact(n){$('#pay-box').innerHTML='<div class="trust"><b>WhatsApp débloqué</b><p>'+esc(n)+'</p><a class="primary" style="display:inline-block;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/'+String(n).replace(/[^0-9]/g,'')+'">Ouvrir WhatsApp</a></div>'}
 
-function render(){document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));($('#view-'+state.view)||$('#view-market')).classList.add('active');$('#account').innerHTML=state.session?'<button class="ghost" data-action="dashboard">Mon espace</button><button class="ghost" data-action="logout">Déconnexion</button>':'<button class="primary" data-action="login">Connexion</button>';if(state.view==='market')market();if(state.view==='auth')authView();if(state.view==='dash')dashboard();if(state.view==='ambassador')ambassador()}
+function render(){document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));($('#view-'+state.view)||$('#view-market')).classList.add('active');$('#account').innerHTML=state.session?'<button class="ghost" data-action="dashboard">Mon espace</button><button class="ghost" data-action="logout">Déconnexion</button>':'<button class="primary" data-action="login">Connexion</button>';if(state.view==='market'){market();loadOfficialAnnouncements();}if(state.view==='auth')authView();if(state.view==='dash')dashboard();if(state.view==='ambassador')ambassador()}
 async function action(a,el){
  switch(a){
  case'home':go('market');break;case'signup':state.signup=true;go('auth');break;case'login':state.signup=false;go('auth');break;case'toggle-auth':state.signup=!state.signup;authView();break;
