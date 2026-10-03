@@ -3,13 +3,13 @@
   "private": true,
   "version": "2.0.1",
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "vercel dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "node --check app.js && node --check auth.js && node --check payments.js && node --check supabaseClient.js && node --check ui.js && node --check api/chariow-webhook.js && node --check api/chariow-checkout.js",
+    "test": "node --check app.js && node --check auth.js && node --check payments.js && node --check supabaseClient.js && node --check ui.js && node --check api/chariow-webhook.js && node --check api/chariow-checkout.js"
   },
   "dependencies": {},
   "devDependencies": {
