@@ -9,9 +9,13 @@
   "scripts": {
     "dev": "vercel dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "node --input-type=module --check < app.js && node --input-type=module --check < auth.js && node --input-type=module --check < payments.js && node --input-type=module --check < supabaseClient.js && node --input-type=module --check < ui.js && node --input-type=module --check < api/chariow-webhook.js && node --input-type=module --check < api/chariow-checkout.js && node --input-type=module --check < api/analytics.js && node --input-type=module --check < api/config.js && node --input-type=module --check < api/unlock-contact.js && node --input-type=module --check < api/admin/_auth.js && node --input-type=module --check < api/admin/announcements.js && node --input-type=module --check < api/admin/marketing.js && node --input-type=module --check < fc-console-7mQ4x9R2pK8vN6sT/admin.js",
+    "test": "node --input-type=module --check < app.js && node --input-type=module --check < auth.js && node --input-type=module --check < payments.js && node --input-type=module --check < supabaseClient.js && node --input-type=module --check < ui.js && node --input-type=module --check < api/chariow-webhook.js && node --input-type=module --check < api/chariow-checkout.js && node --input-type=module --check < api/analytics.js && node --input-type=module --check < api/config.js && node --input-type=module --check < api/unlock-contact.js && node --input-type=module --check < api/admin/_auth.js && node --input-type=module --check < api/admin/announcements.js && node --input-type=module --check < api/admin/marketing.js && node --input-type=module --check < fc-console-7mQ4x9R2pK8vN6sT/admin.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@google/genai": "^2.4.0"
+  },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
     "typescript": "^5.9.2",
