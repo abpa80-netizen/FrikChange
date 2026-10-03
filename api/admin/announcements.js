@@ -1,7 +1,7 @@
 import {requireAdmin,json,db} from './_auth.js';
 export default async function handler(req,res){
+  if(req.method==='GET'){const r=await db('official_announcements?select=id,title,text_fr,text_ar,full_text,image_url,badge,category,priority,author,status,created_at&status=eq.active&order=priority.desc,created_at.desc&limit=20');if(!r.ok)return json(res,500,{error:'Unable to load announcements'});return json(res,200,{items:r.data||[]});}
   const a=await requireAdmin(req,res);if(!a.ok)return json(res,a.status,{error:a.error});
-  if(req.method==='GET'){const r=await db('official_announcements?select=*&order=priority.desc,created_at.desc');if(!r.ok)return json(res,500,{error:'Unable to load announcements'});return json(res,200,{items:r.data||[]});}
   if(req.method==='POST'){
     const b=req.body||{};if(!String(b.title||'').trim()||!String(b.textFr||'').trim())return json(res,400,{error:'title and textFr are required'});
     const r=await db('official_announcements',{method:'POST',body:JSON.stringify({title:String(b.title).slice(0,180),text_fr:String(b.textFr).slice(0,5000),text_ar:String(b.textAr||'').slice(0,5000),full_text:String(b.fullText||'').slice(0,8000),image_url:String(b.imageUrl||'').slice(0,1000),badge:String(b.badge||'Annonce Officielle').slice(0,80),category:String(b.category||'officiel').slice(0,80),priority:Number.isFinite(Number(b.priority))?Number(b.priority):0,author:'Direction FrikChange',status:'active'})});
